@@ -1052,7 +1052,7 @@ async function makeCard(r){
   y+=40;ctx.textAlign='left';ctx.font=`700 34px ${SANS}`;ctx.fillStyle=INK;ctx.fillText(u('cardCareers'),M-24,y);
   y+=36;let x=M-24;ctx.font=`500 ${LANG==='en'?25:28}px ${SANS}`;
   t(CAREERS[pairKey(k0,k1)]).forEach(c=>{const w=ctx.measureText(c).width+44;if(x+w>W-M+24){x=M-24;y+=66}
-    ctx.fillStyle=PAPER;rr(ctx,x,y,w,52,26);ctx.fill();ctx.strokeStyle=INK;ctx.lineWidth=2.5;ctx.stroke();ctx.fillStyle=INK;ctx.fillText(c,x+22,y+36);x+=w+12});
+    ctx.fillStyle=PAPER;rr(ctx,x,y,w,52,26);ctx.fill();ctx.strokeStyle=INK;ctx.lineWidth=2.5;ctx.stroke();ctx.fillStyle=INK;ctx.textBaseline='middle';ctx.fillText(c,x+22,y+27);ctx.textBaseline='alphabetic';x+=w+12});
   const FH=y+52+110;
   ctx.fillStyle=DIM;ctx.font=`500 22px ${SANS}`;ctx.textAlign='left';ctx.fillText(u('cardFoot'),M-24,FH-50);
   ctx.textAlign='right';ctx.fillStyle=INK;ctx.font=`600 22px ${MONO}`;ctx.fillText('© KKMEFLICKER',W-M+24,FH-50);
