@@ -205,6 +205,7 @@ details[open] summary::after{content:"−"}
 .code-row .btn{flex:0 0 auto}
 .lock-msg{font-size:14px;min-height:1.4em;color:var(--ink-2)}
 .lock-msg.err{color:#B42318}
+.hero .lockcard{margin-top:4px}
 .unlocked{font-size:13.5px;color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:6px 14px;justify-self:start;margin-top:16px;width:fit-content}
 .fade{animation:fade .4s ease both}
 @keyframes fade{from{opacity:.001;transform:translateY(8px)}to{opacity:1;transform:none}}
@@ -302,6 +303,9 @@ const UI={
  lowConf:['你有 {n} 个场景选了“这几个都不像我”，兴趣部分的结果可能不够准。想要更准的结果，可以重测一次，每题尽量选最接近的选项。','You chose “none of these” in {n} scenes, so your interest results may be less accurate. For a sharper result, retake the test and pick the closest option each time.'],
  cardBlind:['需要留意','Watch out for'],
  lockH:['解锁你的完整报告','Unlock your full report'],
+ gateH:['输入测试码，开始测试','Enter your test code to begin'],
+ gateSub:['这个测试需要测试码。输入后即可开始答题，并查看完整报告。','This test needs a code. Enter it to start and to see your full report.'],
+ gateGo:['开始','Start'],
  lockSub:['你的角色已经揭晓。输入测试码，查看完整报告：','Your character is revealed. Enter your code to see the full report:'],
  lockList:[['别人和你相处的感受','你的盲点与改进方法','三色光谱与兴趣分布','可以参考的职业方向','大五人格详细解读','工作方式建议','可保存分享的结果长图'],['How others feel around you','Your blind spots and how to improve','Your three-colour spectrum','Career directions to explore','Your Big Five in detail','How you work best','A shareable result card']],
  codeL:['测试码','Test code'],unlock:['解锁','Unlock'],checking:['验证中…','Checking…'],
@@ -871,6 +875,14 @@ function renderIntro(){
       <p class="lede">${u('lede')}</p>
       <div class="facts">${facts}</div>
       <div class="cta-row"><button class="btn" id="startBtn">${u('start')}</button><button class="btn secondary" id="resumeBtn" ${state.done||answeredN>0?'':'hidden'}>${state.done?u('seeLast'):u('resume')}</button></div>
+      <form id="gateForm" class="lockcard unlock-form" novalidate hidden>
+        <h2>${u('gateH')}</h2>
+        <p class="sub">${u('gateSub')}</p>
+        <label for="gateInput">${u('codeL')}</label>
+        <div class="code-row"><input id="gateInput" placeholder="TX-XXXX-XXXX" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="14"><button class="btn" type="submit" id="gateBtn">${u('gateGo')}</button></div>
+        <p class="lock-msg" id="gateMsg" role="status" aria-live="polite"></p>
+        <p class="note">${u('codeNote')}${u('buyHint')}</p>
+      </form>
     </section>
     <section class="section">
       <h2>${u('castH')}</h2><p class="sub">${u('castSub')}</p>
@@ -885,8 +897,24 @@ function renderIntro(){
     </section>
     <section class="section"><details><summary>${u('refsH')}</summary>
       <div class="refs">${t(UI.refs).map(r=>`<div><b>${r[0]}</b>${r[1]}</div>`).join('')}<p class="note">${u('refsNote')}</p></div></details></section>`;
-  $('startBtn').onclick=()=>{state=fresh();save();renderQuiz();show('quiz')};
-  $('resumeBtn').onclick=()=>{if(state.done){renderResult();show('result')}else{renderQuiz();show('quiz')}};
+  const goStart=()=>{state=fresh();save();renderQuiz();show('quiz')};
+  const goResume=()=>{if(state.done){renderResult();show('result')}else{renderQuiz();show('quiz')}};
+  let pending=goStart;
+  const gate=next=>{if(UNLOCK.ok)return next();pending=next;$('gateForm').hidden=false;$('gateInput').focus();$('gateForm').scrollIntoView({behavior:'smooth',block:'center'})};
+  $('startBtn').onclick=()=>gate(goStart);
+  $('resumeBtn').onclick=()=>gate(goResume);
+  $('gateForm').onsubmit=async e=>{
+    e.preventDefault();
+    const raw=$('gateInput').value.trim(),btn=$('gateBtn'),msg=$('gateMsg');
+    if(!raw){$('gateInput').focus();return}
+    btn.disabled=true;btn.textContent=u('checking');msg.textContent='';msg.className='lock-msg';
+    try{
+      const r=await codeApi('/api/redeem',raw);
+      if(r.status==='ok'){UNLOCK.ok=true;UNLOCK.checked=true;UNLOCK.code=raw;UNLOCK.expires=r.expires;saveCode(raw);pending();return}
+      msg.textContent=u(r.status==='expired'?'errExpired':r.status==='other_device'?'errOther':'errInvalid');
+    }catch(err){msg.textContent=u('errNet')}
+    msg.className='lock-msg err';btn.disabled=false;btn.textContent=u('gateGo');
+  };
 }
 
 function renderQuiz(){
@@ -1154,7 +1182,7 @@ function applyLang(){
 function setLang(l){if(l===LANG)return;LANG=l;try{localStorage.setItem('tianxing-lang',l)}catch(e){}applyLang()}
 $('langZh').onclick=()=>setLang('zh');$('langEn').onclick=()=>setLang('en');
 $('homeBtn').onclick=()=>{renderIntro();show('intro')};
-load();applyLang();show('intro');
+load();applyLang();show('intro');verifySaved();
 let rz;addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{if(current==='intro')startHero();else if(current==='result'&&state.done)drawHex(score(state.answers))},150)});
 </script>
 
