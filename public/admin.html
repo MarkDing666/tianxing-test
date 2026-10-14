@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>测试码管理 · 天性光谱</title>
+<style>
+:root{--bg:#EEF1F0;--surface:#FBFCFB;--sunk:#E3E8E6;--ink:#16201E;--ink-2:#4A5753;--ink-3:#6B7773;--line:#D3DAD7;--accent:#0E5E57;--accent-soft:#D8EAE6;--bad:#B42318;
+  --f:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;--mono:ui-monospace,Menlo,Consolas,monospace}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f);font-size:15px;line-height:1.6}
+.wrap{max-width:760px;margin:0 auto;padding-inline:18px;padding-block:28px 64px;display:grid;gap:18px}
+h1{margin:0;font-size:24px}
+h2{margin:0 0 10px;font-size:17px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+input,select,textarea{font:inherit;border:1.5px solid var(--line);border-radius:10px;padding:9px 12px;background:#fff;color:var(--ink);min-width:0}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);border-color:var(--accent)}
+textarea{width:100%;min-height:140px;font-family:var(--mono);font-size:14px}
+button{font:inherit;font-weight:700;border:0;border-radius:999px;padding:10px 18px;background:var(--accent);color:#fff;cursor:pointer}
+button.sec{background:var(--sunk);color:var(--ink)}
+button:disabled{opacity:.4;cursor:default}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.stat{background:var(--sunk);border-radius:12px;padding:10px 12px}
+.stat b{display:block;font-family:var(--mono);font-size:22px;font-variant-numeric:tabular-nums}
+.stat span{font-size:12.5px;color:var(--ink-3)}
+.msg{font-size:14px;color:var(--ink-2);min-height:1.4em}
+.msg.err{color:var(--bad)}
+.note{font-size:13px;color:var(--ink-3)}
+.mono{font-family:var(--mono)}
+[hidden]{display:none!important}
+@media (max-width:520px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>测试码管理</h1>
+
+  <section class="card" id="loginCard">
+    <h2>输入管理密钥</h2>
+    <form class="row" id="loginForm">
+      <label for="key" class="note" style="width:100%">管理密钥只保存在当前浏览器标签页里，关掉标签页就需要重新输入。</label>
+      <input id="key" type="password" autocomplete="off" style="flex:1 1 260px" placeholder="KK-…">
+      <button type="submit">进入</button>
+    </form>
+    <p class="msg" id="loginMsg"></p>
+  </section>
+
+  <div id="app" hidden style="display:grid;gap:18px">
+    <section class="card">
+      <div class="row" style="justify-content:space-between"><h2 style="margin:0">用量</h2><button class="sec" id="refresh" type="button">刷新</button></div>
+      <div class="stats" style="margin-top:12px">
+        <div class="stat"><b id="sTotal">–</b><span>全部</span></div>
+        <div class="stat"><b id="sUnused">–</b><span>未使用（可发放）</span></div>
+        <div class="stat"><b id="sActive">–</b><span>使用中（7 天内）</span></div>
+        <div class="stat"><b id="sExpired">–</b><span>已过期</span></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>生成新测试码</h2>
+      <form class="row" id="genForm">
+        <label for="genN">数量</label><input id="genN" type="number" min="1" max="5000" value="100" style="width:110px">
+        <label for="genBatch">批次备注</label><input id="genBatch" placeholder="例如 10月第一批" style="flex:1 1 160px">
+        <button type="submit" id="genBtn">生成</button>
+      </form>
+      <p class="msg" id="genMsg"></p>
+      <div id="genOut" hidden style="display:grid;gap:8px">
+        <label for="genCodes" class="note">新生成的测试码（一行一个）</label>
+        <textarea id="genCodes" readonly></textarea>
+        <div class="row"><button type="button" id="copyBtn">复制全部</button><button type="button" class="sec" id="dlBtn">下载 CSV</button></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>导出</h2>
+      <div class="row">
+        <label for="expSel">状态</label>
+        <select id="expSel"><option value="unused">未使用</option><option value="active">使用中</option><option value="expired">已过期</option><option value="all">全部</option></select>
+        <button type="button" id="expBtn">下载 CSV</button>
+      </div>
+      <p class="msg" id="expMsg"></p>
+    </section>
+
+    <section class="card">
+      <h2>查询 / 换设备</h2>
+      <form class="row" id="lookForm">
+        <label for="lookCode" class="note" style="width:100%">买家换手机打不开时，查到这个码后点“允许换设备”。7 天有效期不会重置。</label>
+        <input id="lookCode" class="mono" placeholder="TX-XXXX-XXXX" style="flex:1 1 200px">
+        <button type="submit">查询</button>
+      </form>
+      <p class="msg" id="lookMsg"></p>
+      <div class="row" id="lookAct" hidden><button type="button" class="sec" id="resetBtn">允许换设备</button></div>
+    </section>
+
+    <section class="card">
+      <h2>导入已有测试码</h2>
+      <form id="impForm" style="display:grid;gap:8px">
+        <label for="impCodes" class="note">把测试码粘贴进来，一行一个。格式不对或已存在的会自动跳过。</label>
+        <textarea id="impCodes" placeholder="TX-6P9P-YAMA"></textarea>
+        <div class="row"><button type="submit">导入</button></div>
+      </form>
+      <p class="msg" id="impMsg"></p>
+    </section>
+  </div>
+
+  <p class="note">© KKMEFLICKER · 天性光谱</p>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+let KEY='';
+try{KEY=sessionStorage.getItem('tx-admin')||''}catch(e){}
+function setMsg(id,text,err){const m=$(id);m.textContent=text;m.className='msg'+(err?' err':'')}
+async function api(path,opts={}){
+  const r=await fetch(path,{...opts,headers:{'x-admin-key':KEY,'content-type':'application/json',...(opts.headers||{})}});
+  if(r.status===401)throw new Error('auth');
+  if(!r.ok)throw new Error('http');
+  return r;
+}
+function saveBlob(text,name){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'text/csv;charset=utf-8'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
+async function loadStats(){
+  const s=await (await api('/api/admin/stats')).json();
+  $('sTotal').textContent=s.total;$('sUnused').textContent=s.unused;$('sActive').textContent=s.active;$('sExpired').textContent=s.expired;
+}
+async function enter(){
+  try{await loadStats();$('loginCard').hidden=true;$('app').hidden=false;try{sessionStorage.setItem('tx-admin',KEY)}catch(e){}}
+  catch(e){setMsg('loginMsg',e.message==='auth'?'密钥不正确。':'连接失败，请稍后再试。',true);KEY=''}
+}
+$('loginForm').onsubmit=e=>{e.preventDefault();KEY=$('key').value.trim();if(KEY)enter()};
+$('refresh').onclick=()=>loadStats().catch(()=>{});
+$('genForm').onsubmit=async e=>{
+  e.preventDefault();const btn=$('genBtn');btn.disabled=true;setMsg('genMsg','生成中…');
+  try{
+    const n=+$('genN').value||100,batch=$('genBatch').value.trim();
+    const d=await (await api('/api/admin/generate',{method:'POST',body:JSON.stringify({n,batch})})).json();
+    $('genCodes').value=d.codes.join('\n');$('genOut').hidden=false;setMsg('genMsg',`已生成 ${d.codes.length} 个测试码。`);loadStats();
+  }catch(err){setMsg('genMsg','生成失败，请稍后再试。',true)}
+  btn.disabled=false;
+};
+$('copyBtn').onclick=async()=>{const v=$('genCodes').value;try{await navigator.clipboard.writeText(v);setMsg('genMsg','已复制到剪贴板。')}catch(e){$('genCodes').select();setMsg('genMsg','请手动复制选中的内容。')}};
+$('dlBtn').onclick=()=>{const rows=$('genCodes').value.split('\n').filter(Boolean);saveBlob('﻿序号,测试码,订单号,发放日期\n'+rows.map((c,i)=>`${i+1},${c},,`).join('\n')+'\n',`测试码_${new Date().toISOString().slice(0,10)}.csv`)};
+$('expBtn').onclick=async()=>{
+  const st=$('expSel').value;setMsg('expMsg','导出中…');
+  try{const t=await (await api('/api/admin/export?status='+st)).text();saveBlob(t,`测试码_${st}.csv`);setMsg('expMsg','已下载。')}
+  catch(e){setMsg('expMsg','导出失败，请稍后再试。',true)}
+};
+let looked=null;
+$('lookForm').onsubmit=async e=>{
+  e.preventDefault();$('lookAct').hidden=true;looked=null;
+  try{
+    const d=await (await api('/api/admin/lookup?code='+encodeURIComponent($('lookCode').value))).json();
+    if(!d.code){setMsg('lookMsg','找不到这个测试码。',true);return}
+    const c=d.code,f=t=>new Date(t).toLocaleString('zh-CN');
+    looked=c.code;
+    if(!c.first_used)setMsg('lookMsg',`${c.code}：未使用（批次：${c.batch||'—'}）`);
+    else{
+      const exp=Date.now()>c.expires;
+      setMsg('lookMsg',`${c.code}：首次使用 ${f(c.first_used)}，${exp?'已于':'有效期至'} ${f(c.expires)}${exp?' 过期':''}；${c.device?'已绑定一台设备':'未绑定设备'}`);
+      if(c.device&&!exp)$('lookAct').hidden=false;
+    }
+  }catch(err){setMsg('lookMsg','查询失败，请稍后再试。',true)}
+};
+$('resetBtn').onclick=async()=>{
+  if(!looked)return;
+  try{await api('/api/admin/reset',{method:'POST',body:JSON.stringify({code:looked})});setMsg('lookMsg',`${looked} 已解除设备绑定，买家可以在新设备上重新输入。`);$('lookAct').hidden=true}
+  catch(e){setMsg('lookMsg','操作失败，请稍后再试。',true)}
+};
+$('impForm').onsubmit=async e=>{
+  e.preventDefault();
+  const codes=$('impCodes').value.split(/[\s,;]+/).filter(Boolean);
+  if(!codes.length)return;
+  try{const d=await (await api('/api/admin/import',{method:'POST',body:JSON.stringify({codes})})).json();setMsg('impMsg',`导入了 ${d.added} 个新测试码。`);$('impCodes').value='';loadStats()}
+  catch(err){setMsg('impMsg','导入失败，请稍后再试。',true)}
+};
+if(KEY)enter();
+</script>
+</body>
+</html>

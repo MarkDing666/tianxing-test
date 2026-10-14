@@ -192,6 +192,20 @@ details[open] summary::after{content:"−"}
 .share-out{display:grid;gap:10px;justify-items:center}
 .share-out img{width:100%;max-width:340px;border-radius:18px;box-shadow:0 14px 34px rgba(0,0,0,.22)}
 .credit{text-align:center;font-family:var(--f-mono);font-size:11px;letter-spacing:.14em;color:var(--ink-3);padding-top:28px;opacity:.8}
+.lockcard{background:var(--surface);border:2px solid var(--ink);border-radius:20px;padding:22px 20px;display:grid;gap:14px}
+.lockcard h2{font-size:23px}
+.lock-list{margin:0;padding:0;list-style:none;display:grid;gap:6px}
+.lock-list li{font-size:14.5px;color:var(--ink-2);padding-left:22px;position:relative}
+.lock-list li::before{content:"";position:absolute;left:4px;top:.62em;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+.unlock-form{display:grid;gap:8px}
+.unlock-form label{font-size:13px;font-weight:700;color:var(--ink-2);letter-spacing:.06em}
+.code-row{display:flex;gap:8px;flex-wrap:wrap}
+.code-row input{flex:1 1 180px;min-width:0;font-family:var(--f-mono);font-size:18px;letter-spacing:.08em;text-transform:uppercase;padding:12px 14px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink)}
+.code-row input:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
+.code-row .btn{flex:0 0 auto}
+.lock-msg{font-size:14px;min-height:1.4em;color:var(--ink-2)}
+.lock-msg.err{color:#B42318}
+.unlocked{font-size:13.5px;color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:6px 14px;justify-self:start;margin-top:16px;width:fit-content}
 .fade{animation:fade .4s ease both}
 @keyframes fade{from{opacity:.001;transform:translateY(8px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.fade{animation:none}.btn,.bar span,.opt,.lk .dot{transition:none}}
@@ -287,6 +301,17 @@ const UI={
  blindH:['需要留意的地方','Blind spots to watch'],blindSub:['每个人都有盲点。下面是像你这样的人最常遇到的几个，每条都附了具体的改进方法。','Everyone has blind spots. These are the most common for people like you, each with a concrete fix.'],fixL:['怎么改进','How to improve'],
  lowConf:['你有 {n} 个场景选了“这几个都不像我”，兴趣部分的结果可能不够准。想要更准的结果，可以重测一次，每题尽量选最接近的选项。','You chose “none of these” in {n} scenes, so your interest results may be less accurate. For a sharper result, retake the test and pick the closest option each time.'],
  cardBlind:['需要留意','Watch out for'],
+ lockH:['解锁你的完整报告','Unlock your full report'],
+ lockSub:['你的角色已经揭晓。输入测试码，查看完整报告：','Your character is revealed. Enter your code to see the full report:'],
+ lockList:[['别人和你相处的感受','你的盲点与改进方法','三色光谱与兴趣分布','可以参考的职业方向','大五人格详细解读','工作方式建议','可保存分享的结果长图'],['How others feel around you','Your blind spots and how to improve','Your three-colour spectrum','Career directions to explore','Your Big Five in detail','How you work best','A shareable result card']],
+ codeL:['测试码','Test code'],unlock:['解锁','Unlock'],checking:['验证中…','Checking…'],
+ codeNote:['测试码首次使用后 7 天内有效，仅限在一台设备上使用。','Each code works on one device for 7 days after first use.'],
+ buyHint:['还没有测试码？请联系 KKMEFLICKER 获取。','No code yet? Get one from KKMEFLICKER.'],
+ errInvalid:['测试码不存在，请检查是否输入正确。','That code doesn’t exist. Please check it and try again.'],
+ errOther:['这个测试码已经在另一台设备上使用了。如需更换设备，请联系发码人。','This code is already in use on another device. Contact the seller to switch devices.'],
+ errExpired:['这个测试码已过期（首次使用后 7 天内有效）。','This code has expired (valid for 7 days after first use).'],
+ errNet:['网络连接失败，请稍后再试。','Couldn’t connect. Please try again in a moment.'],
+ unlocked:['完整报告已解锁 · 有效期至 {d}','Full report unlocked · valid until {d}'],
  portraitH:['你的画像','Your portrait'],strengths:['核心优势','Strengths'],watch:['需要留意','Watch out for'],teamL:['在团队里，你常常是','In a team you are often'],envL:['让你如鱼得水的环境','Where you thrive'],
  specH:['你的三色光谱','Your three-colour spectrum'],specSub:['你的代码由兴趣最强的三种颜色组成，在六边形上连成你独有的路径。','Your code is your three strongest interest colours, joined into your own path on the hexagon.'],
  roles:[['主色','副色','点缀'],['Primary','Secondary','Accent']],
@@ -536,6 +561,56 @@ const REL={
      mirror:[['你非常细心，就是太安静了，发现问题也不一定说出来。','You’re meticulous, but so quiet you might not mention a problem you’ve spotted.'],['发现风险就第一时间说出来，哪怕只是猜测。','Flag risks the moment you see them, even if it’s a hunch.']],
      friction:[['你很严谨，但我需要一点自由，被盯着进度会很难受。','You’re rigorous, but I need freedom; being tracked closely stresses me out.'],['约好检查的时间点，中间给 TA 自由。','Agree on checkpoints and leave them free in between.']]}
 };
+/* ================= TEST CODES ================= */
+const UNLOCK={ok:false,checked:false,code:null,expires:0};
+let memDevice=null;
+function deviceId(){
+  try{let d=localStorage.getItem('tianxing-device');if(!d){d=(crypto.randomUUID?crypto.randomUUID():String(Math.random()).slice(2)+Date.now());localStorage.setItem('tianxing-device',d)}return d}
+  catch(e){if(!memDevice)memDevice=String(Math.random()).slice(2)+Date.now();return memDevice}
+}
+function savedCode(){try{return localStorage.getItem('tianxing-code')}catch(e){return null}}
+function saveCode(c){try{c?localStorage.setItem('tianxing-code',c):localStorage.removeItem('tianxing-code')}catch(e){}}
+async function codeApi(path,code){
+  const r=await fetch(path,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code,device:deviceId()})});
+  if(!r.ok)throw new Error('http '+r.status);return r.json();
+}
+async function verifySaved(){
+  UNLOCK.checked=true;const c=savedCode();if(!c)return;
+  try{const r=await codeApi('/api/check',c);
+    if(r.status==='ok'){UNLOCK.ok=true;UNLOCK.code=c;UNLOCK.expires=r.expires;if(current==='result')renderResult()}
+    else if(r.status!=='ok')saveCode(null);
+  }catch(e){}
+}
+function fmtDate(t){const d=new Date(t);return LANG==='en'?d.toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'}):`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
+function lockPanel(){
+  return `<section class="section"><div class="lockcard">
+    <h2>${u('lockH')}</h2>
+    <p class="sub">${u('lockSub')}</p>
+    <ul class="lock-list">${t(UI.lockList).map(x=>`<li>${x}</li>`).join('')}</ul>
+    <form id="unlockForm" class="unlock-form" novalidate>
+      <label for="codeInput">${u('codeL')}</label>
+      <div class="code-row"><input id="codeInput" name="code" placeholder="TX-XXXX-XXXX" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="14" inputmode="text"><button class="btn" type="submit" id="unlockBtn">${u('unlock')}</button></div>
+      <p class="lock-msg" id="lockMsg" role="status" aria-live="polite"></p>
+    </form>
+    <p class="note">${u('codeNote')}${u('buyHint')}</p>
+    <div><button class="btn secondary" id="againBtn" type="button">${u('again')}</button></div>
+  </div></section>`;
+}
+function bindUnlock(){
+  const f=$('unlockForm');if(!f)return;
+  f.onsubmit=async e=>{
+    e.preventDefault();
+    const raw=$('codeInput').value.trim(),btn=$('unlockBtn'),msg=$('lockMsg');
+    if(!raw){$('codeInput').focus();return}
+    btn.disabled=true;btn.textContent=u('checking');msg.textContent='';msg.className='lock-msg';
+    try{
+      const r=await codeApi('/api/redeem',raw);
+      if(r.status==='ok'){UNLOCK.ok=true;UNLOCK.checked=true;UNLOCK.code=raw;UNLOCK.expires=r.expires;saveCode(raw);renderResult();const el=$('unlockedBadge');if(el)el.scrollIntoView({behavior:'smooth',block:'start'});return}
+      msg.textContent=u(r.status==='expired'?'errExpired':r.status==='other_device'?'errOther':'errInvalid');
+    }catch(err){msg.textContent=u('errNet')}
+    msg.className='lock-msg err';btn.disabled=false;btn.textContent=u('unlock');
+  };
+}
 const celURI=id=>'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(CEL[id]);
 function charOf(r){return r.code[0]+(r.ext?'x':'i')}
 function relations(id){
@@ -929,6 +1004,7 @@ function renderResult(){
        <div class="cell wide"><span class="eyebrow">${u('envL')}</span><p>${t(T.env)}</p></div>
      </div>
    </section>
+`+(UNLOCK.ok?`<p class="unlocked" id="unlockedBadge">${u('unlocked',{d:fmtDate(UNLOCK.expires)})}</p>
    <section class="section">
      <h2>${u('relH')}</h2><p class="sub">${u('relSub')}</p>
      <div class="rels">${relations(id).map(([kind,pid])=>{const q=REL[id][kind];return `<div class="rel"><img src="${celURI(pid)}" alt="${t(CHARS[pid].n)}"><div><small>${relLab[kind][0]} · ${relLab[kind][1]}</small><b>${t(CHARS[pid].n)}</b><p class="quote">“${t(q[0])}”</p><p class="rtip"><span>${u('tipL')}</span>${t(q[1])}</p></div></div>`}).join('')}</div>
@@ -969,9 +1045,9 @@ function renderResult(){
      <div class="cta-row"><button class="btn" id="cardBtn">${u('card')}</button><button class="btn secondary" id="againBtn">${u('again')}</button></div>
      <div class="share-out" id="shareOut" hidden></div>
      <p class="note">${u('footNote',{p:pct})}</p>
-   </section></div>`;
-  requestAnimationFrame(()=>drawHex(r));
-  $('cardBtn').onclick=()=>makeCard(r);
+   </section>`:lockPanel())+`</div>`;
+  if(UNLOCK.ok){requestAnimationFrame(()=>drawHex(r));$('cardBtn').onclick=()=>makeCard(r)}
+  else{bindUnlock();if(!UNLOCK.checked)verifySaved()}
   $('againBtn').onclick=()=>{state=fresh();save();renderQuiz();show('quiz')};
 }
 function drawHex(r){
