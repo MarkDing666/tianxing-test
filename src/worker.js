@@ -29,6 +29,8 @@ export class CodeStore extends DurableObject {
     this.sql.exec(
       "CREATE TABLE IF NOT EXISTS codes (code TEXT PRIMARY KEY, created INTEGER NOT NULL, device TEXT, first_used INTEGER, batch TEXT)"
     );
+    // issued = when the seller copied/sent the code to a buyer (added later; ignore "duplicate column")
+    try { this.sql.exec("ALTER TABLE codes ADD COLUMN issued INTEGER"); } catch (e) {}
   }
   row(code) {
     return this.sql.exec("SELECT * FROM codes WHERE code = ?", code).toArray()[0] || null;
@@ -80,6 +82,8 @@ export class CodeStore extends DurableObject {
     return {
       total: one("SELECT COUNT(*) AS n FROM codes"),
       unused: one("SELECT COUNT(*) AS n FROM codes WHERE first_used IS NULL"),
+      available: one("SELECT COUNT(*) AS n FROM codes WHERE first_used IS NULL AND issued IS NULL"),
+      issued: one("SELECT COUNT(*) AS n FROM codes WHERE first_used IS NULL AND issued IS NOT NULL"),
       active: one("SELECT COUNT(*) AS n FROM codes WHERE first_used >= ?", cut),
       expired: one("SELECT COUNT(*) AS n FROM codes WHERE first_used < ?", cut)
     };
@@ -88,11 +92,32 @@ export class CodeStore extends DurableObject {
     const cut = Date.now() - VALID_MS;
     const q = {
       unused: ["SELECT * FROM codes WHERE first_used IS NULL ORDER BY created, code"],
+      available: ["SELECT * FROM codes WHERE first_used IS NULL AND issued IS NULL ORDER BY created, code"],
+      issued: ["SELECT * FROM codes WHERE first_used IS NULL AND issued IS NOT NULL ORDER BY issued DESC"],
+      used: ["SELECT * FROM codes WHERE first_used IS NOT NULL ORDER BY first_used DESC"],
       active: ["SELECT * FROM codes WHERE first_used >= ? ORDER BY first_used DESC", cut],
       expired: ["SELECT * FROM codes WHERE first_used < ? ORDER BY first_used DESC", cut],
       all: ["SELECT * FROM codes ORDER BY created, code"]
     }[status] || ["SELECT * FROM codes WHERE first_used IS NULL ORDER BY created, code"];
     return this.sql.exec(...q).toArray();
+  }
+  // hand out the next n codes nobody has been sent yet, and mark them as sent
+  issueNext(n) {
+    const now = Date.now();
+    const rows = this.sql
+      .exec("SELECT code FROM codes WHERE first_used IS NULL AND issued IS NULL ORDER BY created, code LIMIT ?", n)
+      .toArray();
+    this.ctx.storage.transactionSync(() => {
+      for (const r of rows) this.sql.exec("UPDATE codes SET issued = ? WHERE code = ?", now, r.code);
+    });
+    return rows.map(r => r.code);
+  }
+  // mark one code as sent (true) or put it back as not sent (false)
+  setIssued(code, on) {
+    const r = this.row(code);
+    if (!r) return false;
+    this.sql.exec("UPDATE codes SET issued = ? WHERE code = ?", on ? r.issued || Date.now() : null, code);
+    return true;
   }
   lookup(code) {
     const r = this.row(code);
@@ -122,13 +147,19 @@ async function isAdmin(req) {
   return hex === ADMIN_HASH;
 }
 
+function statusOf(r, now) {
+  if (r.first_used) return now > r.first_used + VALID_MS ? { key: "expired", label: "已过期" } : { key: "active", label: "已使用（7天内）" };
+  if (r.issued) return { key: "issued", label: "已发放·买家未用" };
+  return { key: "available", label: "未发放" };
+}
+
 function toCSV(rows) {
   const fmt = t => (t ? new Date(t + 8 * 3600 * 1000).toISOString().replace("T", " ").slice(0, 16) : "");
-  const lines = ["测试码,状态,首次使用(北京时间),到期(北京时间),批次"];
+  const lines = ["测试码,状态,发放时间(北京时间),首次使用(北京时间),到期(北京时间),批次"];
   const now = Date.now();
   for (const r of rows) {
-    const st = !r.first_used ? "未使用" : now > r.first_used + VALID_MS ? "已过期" : "使用中";
-    lines.push([r.code, st, fmt(r.first_used), fmt(r.first_used && r.first_used + VALID_MS), r.batch || ""].join(","));
+    const st = statusOf(r, now).label;
+    lines.push([r.code, st, fmt(r.issued), fmt(r.first_used), fmt(r.first_used && r.first_used + VALID_MS), r.batch || ""].join(","));
   }
   return "﻿" + lines.join("\n") + "\n";
 }
@@ -164,6 +195,27 @@ export default {
           const b = await req.json().catch(() => ({}));
           const list = Array.isArray(b.codes) ? b.codes.slice(0, 20000) : [];
           return json({ added: await store.importCodes(list, String(b.batch || "import").slice(0, 40)) });
+        }
+        if (p === "/api/admin/list") {
+          const rows = await store.list(url.searchParams.get("status") || "all");
+          const now = Date.now();
+          return json({
+            codes: rows.map(r => ({
+              code: r.code, batch: r.batch || "", created: r.created, issued: r.issued || null,
+              first_used: r.first_used || null, expires: r.first_used ? r.first_used + VALID_MS : null,
+              device: !!r.device, status: statusOf(r, now).key
+            }))
+          });
+        }
+        if (p === "/api/admin/next" && req.method === "POST") {
+          const b = await req.json().catch(() => ({}));
+          const n = Math.max(1, Math.min(500, parseInt(b.n, 10) || 1));
+          return json({ codes: await store.issueNext(n) });
+        }
+        if (p === "/api/admin/issued" && req.method === "POST") {
+          const b = await req.json().catch(() => ({}));
+          const code = normalize(b.code);
+          return json({ ok: code ? await store.setIssued(code, !!b.on) : false });
         }
         if (p === "/api/admin/lookup") {
           const code = normalize(url.searchParams.get("code"));

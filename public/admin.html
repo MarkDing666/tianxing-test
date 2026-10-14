@@ -25,11 +25,32 @@ button:disabled{opacity:.4;cursor:default}
 .stat{background:var(--sunk);border-radius:12px;padding:10px 12px}
 .stat b{display:block;font-family:var(--mono);font-size:22px;font-variant-numeric:tabular-nums}
 .stat span{font-size:12.5px;color:var(--ink-3)}
-.msg{font-size:14px;color:var(--ink-2);min-height:1.4em}
+.msg{font-size:14px;color:var(--ink-2);margin:8px 0 0}
+.msg:empty{display:none}
 .msg.err{color:var(--bad)}
 .note{font-size:13px;color:var(--ink-3)}
 .mono{font-family:var(--mono)}
 [hidden]{display:none!important}
+.big{font-size:16px;padding:12px 22px}
+.picked{font-family:var(--mono);font-size:24px;font-weight:700;letter-spacing:.04em;background:var(--accent-soft);color:var(--accent);border-radius:12px;padding:10px 14px;white-space:pre-line;word-break:break-all}
+.tabs{display:flex;flex-wrap:wrap;gap:6px}
+.tab{background:var(--sunk);color:var(--ink-2);font-weight:600;padding:6px 12px;font-size:13.5px}
+.tab[aria-pressed="true"]{background:var(--ink);color:#fff}
+.list{display:grid;border:1px solid var(--line);border-radius:12px;overflow:hidden;max-height:520px;overflow-y:auto}
+.it{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;align-items:center;padding:9px 12px;border-top:1px solid var(--line);background:#fff}
+.it:first-child{border-top:0}
+.it .c{font-family:var(--mono);font-size:15px;font-weight:700}
+.it .t{grid-column:1;font-size:12.5px;color:var(--ink-3)}
+.it .a{grid-column:2;grid-row:1/span 2;display:flex;gap:6px;align-items:center}
+.it.used{background:var(--sunk)}
+.it.used .c{color:var(--ink-3);text-decoration:line-through}
+.badge{display:inline-block;font-family:var(--f);font-size:12px;font-weight:700;border-radius:999px;padding:2px 9px;margin-left:8px;vertical-align:2px;text-decoration:none}
+.b-available{background:var(--accent-soft);color:var(--accent)}
+.b-issued{background:#FCEFD3;color:#8A5300}
+.b-active{background:#16201E;color:#fff}
+.b-expired{background:#D3DAD7;color:#4A5753}
+.mini{font-size:13px;padding:6px 12px}
+.empty{padding:18px;text-align:center;color:var(--ink-3);font-size:14px}
 @media (max-width:520px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 </head>
@@ -52,10 +73,39 @@ button:disabled{opacity:.4;cursor:default}
       <div class="row" style="justify-content:space-between"><h2 style="margin:0">用量</h2><button class="sec" id="refresh" type="button">刷新</button></div>
       <div class="stats" style="margin-top:12px">
         <div class="stat"><b id="sTotal">–</b><span>全部</span></div>
-        <div class="stat"><b id="sUnused">–</b><span>未使用（可发放）</span></div>
-        <div class="stat"><b id="sActive">–</b><span>使用中（7 天内）</span></div>
-        <div class="stat"><b id="sExpired">–</b><span>已过期</span></div>
+        <div class="stat"><b id="sAvail">–</b><span>未发放（可以卖）</span></div>
+        <div class="stat"><b id="sIssued">–</b><span>已发放·买家还没用</span></div>
+        <div class="stat"><b id="sUsed">–</b><span>已使用（含过期 <i id="sExpired" style="font-style:normal">–</i>）</span></div>
       </div>
+    </section>
+
+    <section class="card">
+      <h2>发码给买家</h2>
+      <form class="row" id="nextForm">
+        <label for="nextN">数量</label><input id="nextN" type="number" min="1" max="500" value="1" style="width:90px">
+        <button type="submit" class="big" id="nextBtn">取码并复制</button>
+      </form>
+      <p class="note" style="margin:8px 0 0">每次取出的都是从没发过的码，取出后自动标记为“已发放”，不会再被取到，不用担心重复。</p>
+      <div id="nextOut" hidden style="display:grid;gap:8px;margin-top:12px">
+        <div class="picked" id="nextCodes"></div>
+        <div class="row"><button type="button" class="sec mini" id="nextCopy">再复制一次</button><button type="button" class="sec mini" id="nextUndo">取错了，放回去</button></div>
+      </div>
+      <p class="msg" id="nextMsg"></p>
+    </section>
+
+    <section class="card">
+      <h2>全部测试码</h2>
+      <div class="row" style="justify-content:space-between;margin-bottom:10px">
+        <div class="tabs" id="tabs">
+          <button type="button" class="tab" data-s="all" aria-pressed="true">全部</button>
+          <button type="button" class="tab" data-s="available" aria-pressed="false">未发放</button>
+          <button type="button" class="tab" data-s="issued" aria-pressed="false">已发放·未用</button>
+          <button type="button" class="tab" data-s="used" aria-pressed="false">已使用</button>
+        </div>
+        <input id="search" class="mono" placeholder="搜索测试码" style="flex:0 1 180px;padding:6px 10px">
+      </div>
+      <div class="list" id="list"><div class="empty">加载中…</div></div>
+      <p class="msg" id="listMsg"></p>
     </section>
 
     <section class="card">
@@ -66,18 +116,13 @@ button:disabled{opacity:.4;cursor:default}
         <button type="submit" id="genBtn">生成</button>
       </form>
       <p class="msg" id="genMsg"></p>
-      <div id="genOut" hidden style="display:grid;gap:8px">
-        <label for="genCodes" class="note">新生成的测试码（一行一个）</label>
-        <textarea id="genCodes" readonly></textarea>
-        <div class="row"><button type="button" id="copyBtn">复制全部</button><button type="button" class="sec" id="dlBtn">下载 CSV</button></div>
-      </div>
     </section>
 
     <section class="card">
       <h2>导出</h2>
       <div class="row">
         <label for="expSel">状态</label>
-        <select id="expSel"><option value="unused">未使用</option><option value="active">使用中</option><option value="expired">已过期</option><option value="all">全部</option></select>
+        <select id="expSel"><option value="all">全部</option><option value="available">未发放</option><option value="issued">已发放·未用</option><option value="used">已使用</option></select>
         <button type="button" id="expBtn">下载 CSV</button>
       </div>
       <p class="msg" id="expMsg"></p>
@@ -121,25 +166,80 @@ async function api(path,opts={}){
 function saveBlob(text,name){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'text/csv;charset=utf-8'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
 async function loadStats(){
   const s=await (await api('/api/admin/stats')).json();
-  $('sTotal').textContent=s.total;$('sUnused').textContent=s.unused;$('sActive').textContent=s.active;$('sExpired').textContent=s.expired;
+  $('sTotal').textContent=s.total;$('sAvail').textContent=s.available;$('sIssued').textContent=s.issued;$('sUsed').textContent=s.active+s.expired;$('sExpired').textContent=s.expired;
 }
 async function enter(){
-  try{await loadStats();$('loginCard').hidden=true;$('app').hidden=false;try{sessionStorage.setItem('tx-admin',KEY)}catch(e){}}
+  try{await loadStats();loadList();$('loginCard').hidden=true;$('app').hidden=false;try{sessionStorage.setItem('tx-admin',KEY)}catch(e){}}
   catch(e){setMsg('loginMsg',e.message==='auth'?'密钥不正确。':'连接失败，请稍后再试。',true);KEY=''}
 }
 $('loginForm').onsubmit=e=>{e.preventDefault();KEY=$('key').value.trim();if(KEY)enter()};
-$('refresh').onclick=()=>loadStats().catch(()=>{});
+$('refresh').onclick=refreshAll;
+function refreshAll(){loadStats().catch(()=>{});loadList()}
+async function copyText(v){try{await navigator.clipboard.writeText(v);return true}catch(e){const t=document.createElement('textarea');t.value=v;document.body.appendChild(t);t.select();let ok=false;try{ok=document.execCommand('copy')}catch(_){}t.remove();return ok}}
+const fmt=t=>t?new Date(t).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+const LABEL={available:'未发放',issued:'已发放·未用',active:'已使用',expired:'已使用·已过期'};
+let ALL=[],FILTER='all';
+async function loadList(){
+  try{ALL=(await (await api('/api/admin/list?status=all')).json()).codes;drawList()}
+  catch(e){$('list').innerHTML='<div class="empty">列表加载失败，点右上角“刷新”再试。</div>'}
+}
+function drawList(){
+  const q=$('search').value.toUpperCase().replace(/[^A-Z0-9]/g,'');
+  let rows=ALL.filter(r=>FILTER==='all'||(FILTER==='used'?(r.status==='active'||r.status==='expired'):r.status===FILTER));
+  if(q)rows=rows.filter(r=>r.code.replace(/-/g,'').includes(q));
+  const order={available:0,issued:1,active:2,expired:3};
+  if(FILTER==='all')rows=rows.slice().sort((a,b)=>order[a.status]-order[b.status]);
+  const shown=rows.slice(0,400);
+  if(!shown.length){$('list').innerHTML='<div class="empty">没有符合的测试码。</div>';return}
+  $('list').innerHTML=shown.map(r=>{
+    const used=r.status==='active'||r.status==='expired';
+    const t=r.status==='available'?`批次 ${r.batch||'—'}`:r.status==='issued'?`发放于 ${fmt(r.issued)}`:`首次使用 ${fmt(r.first_used)} · ${r.status==='expired'?'已过期':'到期 '+fmt(r.expires)}`;
+    const act=r.status==='available'?`<button type="button" class="mini" data-act="take" data-c="${r.code}">复制</button>`:r.status==='issued'?`<button type="button" class="sec mini" data-act="copy" data-c="${r.code}">复制</button><button type="button" class="sec mini" data-act="back" data-c="${r.code}">放回</button>`:'';
+    return `<div class="it${used?' used':''}"><div><span class="c">${r.code}</span><span class="badge b-${r.status}">${LABEL[r.status]}</span></div><div class="t">${t}</div><div class="a">${act}</div></div>`;
+  }).join('')+(rows.length>shown.length?`<div class="empty">只显示前 400 个，用搜索或导出查看其余的。</div>`:'');
+}
+$('tabs').onclick=e=>{const b=e.target.closest('.tab');if(!b)return;FILTER=b.dataset.s;for(const x of $('tabs').children)x.setAttribute('aria-pressed',x===b?'true':'false');drawList()};
+$('search').oninput=drawList;
+$('list').onclick=async e=>{
+  const b=e.target.closest('button[data-act]');if(!b)return;const c=b.dataset.c;
+  try{
+    if(b.dataset.act==='take'){await api('/api/admin/issued',{method:'POST',body:JSON.stringify({code:c,on:true})});const ok=await copyText(c);setMsg('listMsg',ok?`${c} 已复制，并标记为已发放。`:`${c} 已标记为已发放，请手动复制。`)}
+    else if(b.dataset.act==='copy'){const ok=await copyText(c);setMsg('listMsg',ok?`${c} 已复制（这个码之前已经发过）。`:'请手动复制。')}
+    else{await api('/api/admin/issued',{method:'POST',body:JSON.stringify({code:c,on:false})});setMsg('listMsg',`${c} 已放回“未发放”。`)}
+    refreshAll();
+  }catch(err){setMsg('listMsg','操作失败，请稍后再试。',true)}
+};
+let lastPicked=[];
+$('nextForm').onsubmit=async e=>{
+  e.preventDefault();const btn=$('nextBtn');btn.disabled=true;
+  try{
+    const n=Math.max(1,+$('nextN').value||1);
+    const d=await (await api('/api/admin/next',{method:'POST',body:JSON.stringify({n})})).json();
+    lastPicked=d.codes;
+    if(!d.codes.length){$('nextOut').hidden=true;setMsg('nextMsg','没有未发放的测试码了，请先在下面生成一批。',true)}
+    else{
+      $('nextCodes').textContent=d.codes.join('\n');$('nextOut').hidden=false;
+      const ok=await copyText(d.codes.join('\n'));
+      setMsg('nextMsg',(ok?'已复制':'请手动复制上面的码')+`，${d.codes.length} 个码已标记为已发放。`+(d.codes.length<n?`（只剩这 ${d.codes.length} 个可发）`:''));
+    }
+    refreshAll();
+  }catch(err){setMsg('nextMsg','取码失败，请稍后再试。',true)}
+  btn.disabled=false;
+};
+$('nextCopy').onclick=async()=>{const ok=await copyText(lastPicked.join('\n'));setMsg('nextMsg',ok?'已再复制一次。':'请手动复制。')};
+$('nextUndo').onclick=async()=>{
+  try{for(const c of lastPicked)await api('/api/admin/issued',{method:'POST',body:JSON.stringify({code:c,on:false})});setMsg('nextMsg',`已放回 ${lastPicked.length} 个码，它们会重新出现在“未发放”里。`);lastPicked=[];$('nextOut').hidden=true;refreshAll()}
+  catch(e){setMsg('nextMsg','操作失败，请稍后再试。',true)}
+};
 $('genForm').onsubmit=async e=>{
   e.preventDefault();const btn=$('genBtn');btn.disabled=true;setMsg('genMsg','生成中…');
   try{
     const n=+$('genN').value||100,batch=$('genBatch').value.trim();
     const d=await (await api('/api/admin/generate',{method:'POST',body:JSON.stringify({n,batch})})).json();
-    $('genCodes').value=d.codes.join('\n');$('genOut').hidden=false;setMsg('genMsg',`已生成 ${d.codes.length} 个测试码。`);loadStats();
+    setMsg('genMsg',`已生成 ${d.codes.length} 个测试码，都在“未发放”里。卖的时候用上面的“取码并复制”。`);refreshAll();
   }catch(err){setMsg('genMsg','生成失败，请稍后再试。',true)}
   btn.disabled=false;
 };
-$('copyBtn').onclick=async()=>{const v=$('genCodes').value;try{await navigator.clipboard.writeText(v);setMsg('genMsg','已复制到剪贴板。')}catch(e){$('genCodes').select();setMsg('genMsg','请手动复制选中的内容。')}};
-$('dlBtn').onclick=()=>{const rows=$('genCodes').value.split('\n').filter(Boolean);saveBlob('﻿序号,测试码,订单号,发放日期\n'+rows.map((c,i)=>`${i+1},${c},,`).join('\n')+'\n',`测试码_${new Date().toISOString().slice(0,10)}.csv`)};
 $('expBtn').onclick=async()=>{
   const st=$('expSel').value;setMsg('expMsg','导出中…');
   try{const t=await (await api('/api/admin/export?status='+st)).text();saveBlob(t,`测试码_${st}.csv`);setMsg('expMsg','已下载。')}
@@ -153,7 +253,7 @@ $('lookForm').onsubmit=async e=>{
     if(!d.code){setMsg('lookMsg','找不到这个测试码。',true);return}
     const c=d.code,f=t=>new Date(t).toLocaleString('zh-CN');
     looked=c.code;
-    if(!c.first_used)setMsg('lookMsg',`${c.code}：未使用（批次：${c.batch||'—'}）`);
+    if(!c.first_used)setMsg('lookMsg',`${c.code}：买家还没用${c.issued?`（已于 ${f(c.issued)} 发放）`:'（未发放）'}，批次：${c.batch||'—'}`);
     else{
       const exp=Date.now()>c.expires;
       setMsg('lookMsg',`${c.code}：首次使用 ${f(c.first_used)}，${exp?'已于':'有效期至'} ${f(c.expires)}${exp?' 过期':''}；${c.device?'已绑定一台设备':'未绑定设备'}`);
@@ -170,7 +270,7 @@ $('impForm').onsubmit=async e=>{
   e.preventDefault();
   const codes=$('impCodes').value.split(/[\s,;]+/).filter(Boolean);
   if(!codes.length)return;
-  try{const d=await (await api('/api/admin/import',{method:'POST',body:JSON.stringify({codes})})).json();setMsg('impMsg',`导入了 ${d.added} 个新测试码。`);$('impCodes').value='';loadStats()}
+  try{const d=await (await api('/api/admin/import',{method:'POST',body:JSON.stringify({codes})})).json();setMsg('impMsg',`导入了 ${d.added} 个新测试码。`);$('impCodes').value='';refreshAll()}
   catch(err){setMsg('impMsg','导入失败，请稍后再试。',true)}
 };
 if(KEY)enter();
